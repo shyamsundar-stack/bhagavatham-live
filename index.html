@@ -52,7 +52,16 @@ try{ if('TIKTOK_PIXEL_ID_PLACEHOLDER'.indexOf('PLACEHOLDER')===-1){ ttq.load('TI
   .kicker{letter-spacing:.18em;text-transform:uppercase;font-size:12px;color:var(--gold);font-family:Arial,Helvetica,sans-serif;margin:0 0 6px}
   h1{margin:.1em 0 .15em;font-size:34px;color:var(--blue);line-height:1.15}
   .session{font-size:21px;color:var(--maroon);margin:0 0 14px}
-  .when{display:inline-flex;gap:14px;align-items:center;justify-content:center;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:var(--ink);background:var(--cream-2);border:1px solid var(--line);border-radius:999px;padding:8px 18px;margin-bottom:20px;}
+  .when{display:inline-flex;gap:14px;align-items:center;justify-content:center;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:var(--ink);background:var(--cream-2);border:1px solid var(--line);border-radius:999px;padding:8px 18px;margin-bottom:18px;}
+  .countdown{margin:2px auto 24px;max-width:430px;min-height:46px}
+  .cd-label{font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin:0 0 8px}
+  .cd-clock{display:flex;justify-content:center;gap:8px}
+  .cd-unit{background:var(--cream-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-width:58px}
+  .cd-num{font-family:Georgia,serif;font-size:28px;font-weight:bold;color:var(--blue);line-height:1}
+  .cd-cap{font-family:Arial,Helvetica,sans-serif;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:5px}
+  .live{display:inline-flex;align-items:center;gap:9px;font-family:Arial,Helvetica,sans-serif;font-weight:bold;color:#fff;background:#b8323b;padding:9px 20px;border-radius:999px;font-size:15px}
+  .live .dot{width:9px;height:9px;border-radius:50%;background:#fff;animation:pulse 1.2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
   .synopsis-wrap{max-width:540px;margin:0 auto 26px;text-align:left;background:#fffdf7;border:1px solid var(--line);border-radius:12px;padding:16px 20px;}
   .synopsis-label{font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin:0 0 6px}
   .synopsis{font-size:16px;line-height:1.6;color:#4b4636;margin:0}
@@ -90,10 +99,7 @@ try{ if('TIKTOK_PIXEL_ID_PLACEHOLDER'.indexOf('PLACEHOLDER')===-1){ ttq.load('TI
       <p class="session" id="session">Session</p>
       <div class="when"><span id="when-date">—</span> · <span id="when-time">—</span></div>
 
-      <div class="synopsis-wrap">
-        <p class="synopsis-label" id="synopsis-label">In today's session</p>
-        <p class="synopsis" id="synopsis">—</p>
-      </div>
+      <div class="countdown" id="cd"></div>
 
       <div class="field">
         <label for="name">Your full name</label>
@@ -101,6 +107,11 @@ try{ if('TIKTOK_PIXEL_ID_PLACEHOLDER'.indexOf('PLACEHOLDER')===-1){ ttq.load('TI
         <div class="err" id="err"></div>
         <button class="watch" id="watch">Watch now &nbsp;&rsaquo;</button>
         <a class="register" id="register" href="#"><span>New here? Register for the workshop</span></a>
+      </div>
+
+      <div class="synopsis-wrap">
+        <p class="synopsis-label" id="synopsis-label">In this session</p>
+        <p class="synopsis" id="synopsis">—</p>
       </div>
 
       <div class="divider"></div>
@@ -113,17 +124,19 @@ try{ if('TIKTOK_PIXEL_ID_PLACEHOLDER'.indexOf('PLACEHOLDER')===-1){ ttq.load('TI
   <div class="toast" id="toast"></div>
 
 <script>
-  /* ===== SCHEDULE (master copy lives in the Sheet "Schedule" tab; keep in sync) =====
-     Add one entry per session. The page auto-selects today's session, else the next upcoming. */
+  /* ===== SCHEDULE (master copy lives in the Sheet "Schedule" tab — keep in sync) =====
+     One entry per session. The page auto-advances to the next session the moment the
+     current one ends, and the countdown resets. */
   const SESSIONS = [
     {
-      date: "2026-06-22",                 // premiere date (IST)
       episode: "Session 14",
-      talkTime: "6:30 PM IST",            // when the talk begins (premiere starts 6:25 with the 5-min countdown)
+      startsAt: "2026-06-22T18:25:00+05:30",  // premiere goes live (5-min countdown, talk at 6:30)
+      endsAt:   "2026-06-22T19:10:00+05:30",  // after this the page advances to the next session
+      timeLabel: "6:30 PM IST",
       synopsis: "On the boundless compassion of the Lord — Karuṇā Sindhu, the very ocean of mercy. Through Draupadi's protection in her hour of need and the deliverance of Gajendra, we reflect on how the Divine answers the sincere call of every devotee.",
       watchUrl: "https://www.youtube.com/watch?v=_R9uDW8fn9I"
     }
-    // , { date:"2026-06-25", episode:"Session 15", talkTime:"6:30 PM IST", synopsis:"…", watchUrl:"…" }
+    // , { episode:"Session 15", startsAt:"2026-06-25T18:25:00+05:30", endsAt:"2026-06-25T19:10:00+05:30", timeLabel:"6:30 PM IST", synopsis:"…", watchUrl:"…" }
   ];
 
   const CONFIG = {
@@ -131,48 +144,54 @@ try{ if('TIKTOK_PIXEL_ID_PLACEHOLDER'.indexOf('PLACEHOLDER')===-1){ ttq.load('TI
     attendanceWebhook: "https://n8n.epixentertainment.com/webhook/bhagavatam-attendance"
   };
 
-  // ---- pick today's session (IST), else the next upcoming, else the latest ----
-  function istToday(){ return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'}); }
-  function pickSession(){
-    if(!SESSIONS.length) return null;
-    const t = istToday();
-    let s = SESSIONS.find(x=>x.date===t);
-    if(!s){ const up = SESSIONS.filter(x=>x.date>=t).sort((a,b)=>a.date<b.date?-1:1); s = up[0] || [...SESSIONS].sort((a,b)=>a.date<b.date?1:-1)[0]; }
-    return s;
+  const $ = id => document.getElementById(id);
+  function prettyDate(iso){ try{ return new Date(iso).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'Asia/Kolkata'}); }catch(e){ return ''; } }
+  function pick(now){ const list=[...SESSIONS].sort((a,b)=>Date.parse(a.startsAt)-Date.parse(b.startsAt)); return list.find(s=>Date.parse(s.endsAt)>now) || list[list.length-1] || null; }
+
+  let current = null;
+  function render(s){
+    current = s;
+    $('session').textContent = s ? s.episode : '';
+    $('when-date').textContent = s ? prettyDate(s.startsAt) : '';
+    $('when-time').textContent = s ? s.timeLabel : '';
+    $('synopsis').textContent = s ? s.synopsis : '';
+    $('synopsis-label').textContent = "In this session";
+    $('register').href = CONFIG.registerUrl;
   }
-  function prettyDate(d){
-    try{ return new Date(d+'T12:00:00+05:30').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'Asia/Kolkata'}); }
-    catch(e){ return d; }
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function unit(n,c){ return '<div class="cd-unit"><div class="cd-num">'+pad(n)+'</div><div class="cd-cap">'+c+'</div></div>'; }
+  function tick(){
+    const now = Date.now();
+    const s = pick(now);
+    if(!s){ $('cd').innerHTML=''; return; }
+    if(!current || s.episode!==current.episode){ render(s); }   // first render / auto-advance to next session
+    const start = Date.parse(s.startsAt), end = Date.parse(s.endsAt), cd = $('cd');
+    if(now < start){
+      let r = Math.floor((start-now)/1000);
+      const days=Math.floor(r/86400); r-=days*86400;
+      const hrs=Math.floor(r/3600); r-=hrs*3600;
+      const min=Math.floor(r/60); const sec=r-min*60;
+      cd.innerHTML = '<div class="cd-label">Begins in</div><div class="cd-clock">'+unit(days,'Days')+unit(hrs,'Hrs')+unit(min,'Min')+unit(sec,'Sec')+'</div>';
+    } else if(now < end){
+      cd.innerHTML = '<span class="live"><span class="dot"></span> Live now — watch below</span>';
+    } else { cd.innerHTML = ''; }
   }
+  tick(); setInterval(tick,1000);
 
-  const current = pickSession();
-  const isToday = current && current.date===istToday();
-
-  // ---- render ----
-  document.getElementById('session').textContent = current ? current.episode : '';
-  document.getElementById('when-date').textContent = current ? prettyDate(current.date) : '';
-  document.getElementById('when-time').textContent = current ? current.talkTime : '';
-  document.getElementById('synopsis').textContent = current ? current.synopsis : '';
-  document.getElementById('synopsis-label').textContent = isToday ? "In today's session" : "In this session";
-  document.getElementById('register').href = CONFIG.registerUrl;
-
-  const nameEl=document.getElementById('name'), errEl=document.getElementById('err'), btn=document.getElementById('watch'), toast=document.getElementById('toast');
+  // ---- form ----
+  const nameEl=$('name'), errEl=$('err'), btn=$('watch'), toast=$('toast');
   function showToast(m){ toast.textContent=m; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'),2600); }
-  try{ const s=localStorage.getItem('bw_name'); if(s) nameEl.value=s; }catch(e){}
+  try{ const v=localStorage.getItem('bw_name'); if(v) nameEl.value=v; }catch(e){}
   function utm(){ const p=new URLSearchParams(location.search); const o={}; ['utm_source','utm_medium','utm_campaign'].forEach(k=>o[k]=p.get(k)||''); return o; }
-
   async function go(){
     const name=nameEl.value.trim();
     if(name.length<2){ errEl.textContent="Please enter your full name to continue."; nameEl.focus(); return; }
-    errEl.textContent="";
-    try{ localStorage.setItem('bw_name',name); }catch(e){}
+    errEl.textContent=""; try{ localStorage.setItem('bw_name',name); }catch(e){}
     try{ if(window.fbq) fbq('track','Lead',{content_name:current&&current.episode}); }catch(e){}
     try{ if(window.ttq) ttq.track('SubmitForm',{content_name:current&&current.episode}); }catch(e){}
     btn.disabled=true; btn.textContent="Opening…";
     const payload={ full_name:name, episode:current?current.episode:'', watch_url:current?current.watchUrl:'', referrer:document.referrer, ...utm(), ts:new Date().toISOString() };
-    if(CONFIG.attendanceWebhook){
-      try{ await fetch(CONFIG.attendanceWebhook,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),keepalive:true}); }catch(e){}
-    }
+    if(CONFIG.attendanceWebhook){ try{ await fetch(CONFIG.attendanceWebhook,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),keepalive:true}); }catch(e){} }
     if(current && current.watchUrl){ location.href=current.watchUrl; }
     else { btn.disabled=false; btn.textContent="Watch now  ›"; showToast("The session link goes live shortly — thank you, "+name.split(' ')[0]+"!"); }
   }
